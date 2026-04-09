@@ -1,9 +1,11 @@
 package me.jumper251.replay.replaysystem.replaying;
 
-import com.comphenix.packetwrapper.WrapperPlayServerTickState;
-import com.comphenix.packetwrapper.WrapperPlayServerTitle;
-import com.comphenix.protocol.wrappers.EnumWrappers.TitleAction;
-import com.comphenix.protocol.wrappers.WrappedChatComponent;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetTitleSubtitle;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetTitleText;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetTitleTimes;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerTickingState;
+import me.jumper251.replay.utils.PacketEventsUtil;
+import net.kyori.adventure.text.Component;
 import com.google.gson.Gson;
 import me.jumper251.replay.filesystem.*;
 import me.jumper251.replay.utils.version.MaterialBridge;
@@ -127,29 +129,14 @@ public class ReplayHelper {
             return;
         }
 
-        WrapperPlayServerTitle packet = new WrapperPlayServerTitle();
-        packet.setAction(TitleAction.TIMES);
-        packet.setStay(stay);
-        packet.setFadeIn(0);
-        packet.setFadeOut(20);
-
-        packet.sendPacket(player);
+        PacketEventsUtil.sendPacket(player, new WrapperPlayServerSetTitleTimes(0, stay, 20));
 
         if (subTitle != null) {
-            WrapperPlayServerTitle sub = new WrapperPlayServerTitle();
-            sub.setAction(TitleAction.SUBTITLE);
-            sub.setTitle(WrappedChatComponent.fromText(subTitle));
-
-            sub.sendPacket(player);
+            PacketEventsUtil.sendPacket(player, new WrapperPlayServerSetTitleSubtitle(Component.text(subTitle)));
         }
 
-        WrapperPlayServerTitle titlePacket = new WrapperPlayServerTitle();
-        titlePacket.setAction(TitleAction.TITLE);
-        titlePacket.setTitle(title != null ? WrappedChatComponent.fromText(title) : WrappedChatComponent.fromText(""));
-
-        titlePacket.sendPacket(player);
-
-
+        PacketEventsUtil.sendPacket(player, new WrapperPlayServerSetTitleText(
+                title != null ? Component.text(title) : Component.empty()));
     }
 
     public static boolean isInRange(Location loc1, Location loc2) {
@@ -174,11 +161,7 @@ public class ReplayHelper {
             return;
         }
 
-        WrapperPlayServerTickState packet = new WrapperPlayServerTickState();
-        packet.setTickRate(20f);
-        packet.setFrozen(pause);
-
-        packet.sendPacket(player);
+        PacketEventsUtil.sendPacket(player, new WrapperPlayServerTickingState(20f, pause));
     }
 
 }

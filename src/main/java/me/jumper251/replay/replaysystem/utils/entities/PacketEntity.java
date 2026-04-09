@@ -1,257 +1,218 @@
 package me.jumper251.replay.replaysystem.utils.entities;
 
-
-import java.util.Arrays;
-import java.util.UUID;
-
-import com.comphenix.packetwrapper.*;
+import com.github.retrooper.packetevents.protocol.entity.data.EntityData;
+import com.github.retrooper.packetevents.util.Vector3d;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityHeadLook;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityRelativeMoveAndRotation;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityRotation;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityStatus;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityTeleport;
+import me.jumper251.replay.utils.MathUtils;
+import me.jumper251.replay.utils.PacketEventsUtil;
+import me.jumper251.replay.utils.VersionUtil;
+import me.jumper251.replay.utils.VersionUtil.VersionEnum;
 import org.bukkit.Location;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 
-import com.comphenix.packetwrapper.v15.WrapperPlayServerRelEntityMoveLook;
-import com.comphenix.protocol.wrappers.WrappedDataWatcher;
+import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
 
-import me.jumper251.replay.utils.MathUtils;
-import me.jumper251.replay.utils.VersionUtil;
-import me.jumper251.replay.utils.VersionUtil.VersionEnum;
+public class PacketEntity implements IEntity {
 
-public class PacketEntity implements IEntity{
+    private int id;
 
-	private int id;
-			
-	private WrappedDataWatcher data;
-		
-	private Location location, origin;
-	
-	private SpawnPacket spawnPacket;
-	
-	private float yaw, pitch;
-	
-	private Player[] visible;
-	
-	private Player oldVisible;
-	
-	
-	private EntityType type;
+    private List<EntityData<?>> data;
 
-	
-	public PacketEntity(int id, EntityType type) {
-		this.id = id;
-		if (VersionUtil.isAbove(VersionEnum.V1_19)) {
-			this.spawnPacket = new SpawnPacket(new WrapperPlayServerSpawnEntity());
-		} else {
-			this.spawnPacket = new SpawnPacket(new WrapperPlayServerSpawnEntityLiving());
-		}
-		this.type = type;
-	}
-	
-	public PacketEntity(EntityType type) {
-		this(MathUtils.randInt(50000, 400000), type);
-	}
-	
-	@Override
-	public void spawn(Location loc, Player... players) {
-		this.visible = players;
-		this.oldVisible = players[0];
-		this.location = loc;
-		this.origin = loc;
+    private Location location;
 
-		this.spawnPacket.setEntityID(this.id);
-		this.spawnPacket.setType(this.type);
-		this.spawnPacket.setUniqueId(UUID.randomUUID());
-		this.spawnPacket.setX(this.location.getX());
-		this.spawnPacket.setY(this.location.getY());
-		this.spawnPacket.setZ(this.location.getZ());
-		this.spawnPacket.setYaw(this.yaw);
-		this.spawnPacket.setPitch(this.pitch);
-		
-		if(this.data != null) this.spawnPacket.setMetadata(this.data);
+    private Location origin;
 
-		for(Player player : Arrays.asList(players)) {
-			this.spawnPacket.sendPacket(player);
-		}
-	}
+    private SpawnPacket spawnPacket;
 
-	@Override
-	public void respawn(Player... players) {
-		
-	}
+    private float yaw;
 
-	@Override
-	public void despawn() {
-		WrapperPlayServerEntityDestroy destroyPacket = new WrapperPlayServerEntityDestroy();
-		
-		if (VersionUtil.isAbove(VersionEnum.V1_17)) {
-			destroyPacket.getHandle().getIntLists().write(0, Arrays.asList(this.id));
-		} else {
-			destroyPacket.setEntityIds(new int[] { this.id });
-		}	
-		
-		for (Player player : Arrays.asList(this.visible)) {
-			if(player != null){				
-				destroyPacket.sendPacket(player);
-			}
-		}
-		
-		Arrays.fill(this.visible, null);		
-	}
+    private float pitch;
 
-	@Override
-	public void remove() {
-		WrapperPlayServerEntityDestroy destroyPacket = new WrapperPlayServerEntityDestroy();
-		
-		if (VersionUtil.isAbove(VersionEnum.V1_17)) {
-			destroyPacket.getHandle().getIntLists().write(0, Arrays.asList(this.id));
-		} else {
-			destroyPacket.setEntityIds(new int[] { this.id });
-		}	
-		
-		if(this.oldVisible != null){				
-			destroyPacket.sendPacket(this.oldVisible);
-		}		
-	}
+    private Player[] visible;
 
-	@Override
-	public void teleport(Location loc, boolean onGround) {
-		this.location = loc;
-		
-		WrapperPlayServerEntityTeleport packet = new WrapperPlayServerEntityTeleport();
+    private Player oldVisible;
 
-		packet.setEntityID(this.id);
-		packet.setX(loc.getX());
-		packet.setY(loc.getY());
-		packet.setZ(loc.getZ());
-		packet.setPitch(loc.getPitch());
-		packet.setYaw(loc.getYaw());
-		packet.setOnGround(onGround);
-		
-		for(Player player : Arrays.asList(this.visible)) {
-			if(player != null) {
-				packet.sendPacket(player);
-			}
-		}		
-	}
+    private EntityType type;
 
-	public void move(Location loc, boolean onGround, float yaw, float pitch) {
-		WrapperPlayServerRelEntityMoveLook packet = new WrapperPlayServerRelEntityMoveLook();
-		WrapperPlayServerEntityHeadRotation head = new WrapperPlayServerEntityHeadRotation();
+    public PacketEntity(int id, EntityType type) {
+        this.id = id;
+        boolean legacyLiving = !VersionUtil.isAbove(VersionEnum.V1_19);
+        this.spawnPacket = new SpawnPacket(legacyLiving, type);
+        this.type = type;
+    }
 
-		packet.setEntityID(this.id);
+    public PacketEntity(EntityType type) {
+        this(MathUtils.randInt(50000, 400000), type);
+    }
 
-		head.setEntityID(this.id);
-		head.setHeadYaw(((byte)(yaw * 256 / 360)));
-		
-		packet.setDx((short) ((loc.getX() * 32 - this.location.getX() * 32) * 128));
-		packet.setDy((short) ((loc.getY() * 32 - this.location.getY() * 32) * 128));
-		packet.setDz((short) ((loc.getZ() * 32 - this.location.getZ() * 32) * 128));
-		packet.setPitch(pitch);
-		packet.setYaw(yaw);
+    @Override
+    public void spawn(Location loc, Player... players) {
+        this.visible = players;
+        this.oldVisible = players[0];
+        this.location = loc;
+        this.origin = loc;
 
-		this.location = loc;
+        this.spawnPacket.setEntityID(this.id);
+        this.spawnPacket.setType(this.type);
+        this.spawnPacket.setUniqueId(UUID.randomUUID());
+        this.spawnPacket.setX(this.location.getX());
+        this.spawnPacket.setY(this.location.getY());
+        this.spawnPacket.setZ(this.location.getZ());
+        this.spawnPacket.setYaw(this.yaw);
+        this.spawnPacket.setPitch(this.pitch);
 
-		for(Player player : Arrays.asList(this.visible)) {
-			if(player != null) {
-				packet.sendPacket(player);
-				head.sendPacket(player);
-			}
-		}
-	}
-	
-	
-	@Override
-	public void look(float yaw, float pitch) {
-		  WrapperPlayServerEntityLook lookPacket = new WrapperPlayServerEntityLook();
-		  WrapperPlayServerEntityHeadRotation head = new WrapperPlayServerEntityHeadRotation();
+        if (this.data != null) {
+            this.spawnPacket.setMetadata(this.data);
+        }
 
-		  head.setEntityID(this.id);
-		  head.setHeadYaw(((byte)(yaw * 256 / 360)));
-		  lookPacket.setEntityID(this.id);
-		  lookPacket.setOnGround(true);
-		  lookPacket.setPitch(pitch);
-		  lookPacket.setYaw(yaw);
-		  
-		  for(Player player : Arrays.asList(this.visible)) {
-			  if(player != null) {
-				  lookPacket.sendPacket(player);
-				  head.sendPacket(player);
-			  }
-		  }		
-	}
+        for (Player player : Arrays.asList(players)) {
+            this.spawnPacket.sendPacket(player);
+        }
+    }
 
-	@Override
-	public void updateMetadata() {
-		
-	}
+    @Override
+    public void respawn(Player... players) {
+    }
 
-	@Override
-	public void animate(int id) {
-		WrapperPlayServerEntityStatus packet = new WrapperPlayServerEntityStatus();
-		
-		packet.setEntityID(this.id);
-		packet.setEntityStatus((byte)id);
-		
-		for (Player player : Arrays.asList(this.visible)) {
-			if (player != null) {
-				packet.sendPacket(player);
-			}
-		}		
-	}
+    @Override
+    public void despawn() {
+        WrapperPlayServerDestroyEntities destroyPacket = new WrapperPlayServerDestroyEntities(this.id);
+        for (Player player : Arrays.asList(this.visible)) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, destroyPacket);
+            }
+        }
+        Arrays.fill(this.visible, null);
+    }
 
-	@Override
-	public int getId() {
-		return this.id;
-	}
+    @Override
+    public void remove() {
+        WrapperPlayServerDestroyEntities destroyPacket = new WrapperPlayServerDestroyEntities(this.id);
+        if (this.oldVisible != null) {
+            PacketEventsUtil.sendPacket(this.oldVisible, destroyPacket);
+        }
+    }
 
+    @Override
+    public void teleport(Location loc, boolean onGround) {
+        this.location = loc;
+        WrapperPlayServerEntityTeleport packet = new WrapperPlayServerEntityTeleport(
+                this.id,
+                new Vector3d(loc.getX(), loc.getY(), loc.getZ()),
+                loc.getYaw(),
+                loc.getPitch(),
+                onGround
+        );
+        for (Player player : Arrays.asList(this.visible)) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, packet);
+            }
+        }
+    }
 
-	@Override
-	public void setId(int id) {
-		this.id = id;
-	}
+    @Override
+    public void move(Location loc, boolean onGround, float yaw, float pitch) {
+        double dx = loc.getX() - this.location.getX();
+        double dy = loc.getY() - this.location.getY();
+        double dz = loc.getZ() - this.location.getZ();
+        WrapperPlayServerEntityRelativeMoveAndRotation packet = new WrapperPlayServerEntityRelativeMoveAndRotation(
+                this.id, dx, dy, dz, yaw, pitch, onGround);
+        WrapperPlayServerEntityHeadLook head = new WrapperPlayServerEntityHeadLook(this.id, yaw);
+        this.location = loc;
+        for (Player player : Arrays.asList(this.visible)) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, packet);
+                PacketEventsUtil.sendPacket(player, head);
+            }
+        }
+    }
 
-	@Override
-	public void setData(WrappedDataWatcher data) {
-		this.data = data;
-	}
+    @Override
+    public void look(float yaw, float pitch) {
+        WrapperPlayServerEntityRotation lookPacket = new WrapperPlayServerEntityRotation(this.id, yaw, pitch, true);
+        WrapperPlayServerEntityHeadLook head = new WrapperPlayServerEntityHeadLook(this.id, yaw);
+        for (Player player : Arrays.asList(this.visible)) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, lookPacket);
+                PacketEventsUtil.sendPacket(player, head);
+            }
+        }
+    }
 
-	@Override
-	public WrappedDataWatcher getData() {
-		return this.data;
-	}
+    @Override
+    public void updateMetadata() {
+    }
 
-	@Override
-	public void setPitch(float pitch) {
-		this.pitch = pitch;
-	}
+    @Override
+    public void animate(int id) {
+        WrapperPlayServerEntityStatus packet = new WrapperPlayServerEntityStatus(this.id, id);
+        for (Player player : Arrays.asList(this.visible)) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, packet);
+            }
+        }
+    }
 
-	@Override
-	public void setYaw(float yaw) {
-		this.yaw = yaw;
-	}
+    @Override
+    public int getId() {
+        return this.id;
+    }
 
-	@Override
-	public Location getLocation() {
-		return this.location;
-	}
+    @Override
+    public void setId(int id) {
+        this.id = id;
+    }
 
-	@Override
-	public void setOrigin(Location origin) {
-		this.origin = origin;
-	}
+    @Override
+    public void setData(List<EntityData<?>> data) {
+        this.data = data;
+    }
 
-	@Override
-	public void setLocation(Location location) {
-		this.location = location;
-	}
+    @Override
+    public List<EntityData<?>> getData() {
+        return this.data;
+    }
 
-	@Override
-	public Location getOrigin() {
-		return this.origin;
-	}
+    @Override
+    public void setPitch(float pitch) {
+        this.pitch = pitch;
+    }
 
-	@Override
-	public Player[] getVisible() {
-		return this.visible;
-	}
+    @Override
+    public void setYaw(float yaw) {
+        this.yaw = yaw;
+    }
 
+    @Override
+    public Location getLocation() {
+        return this.location;
+    }
+
+    @Override
+    public void setOrigin(Location origin) {
+        this.origin = origin;
+    }
+
+    @Override
+    public void setLocation(Location location) {
+        this.location = location;
+    }
+
+    @Override
+    public Location getOrigin() {
+        return this.origin;
+    }
+
+    @Override
+    public Player[] getVisible() {
+        return this.visible;
+    }
 }

@@ -1,7 +1,8 @@
 package me.jumper251.replay.replaysystem.recording;
 
-import com.comphenix.protocol.wrappers.WrappedGameProfile;
-import com.comphenix.protocol.wrappers.WrappedSignedProperty;
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.protocol.player.TextureProperty;
+import com.github.retrooper.packetevents.protocol.player.User;
 import com.google.common.collect.Multimap;
 import me.jumper251.replay.ReplaySystem;
 import me.jumper251.replay.api.IReplayHook;
@@ -188,10 +189,10 @@ public class Recorder {
             }.runTaskAsynchronously(ReplaySystem.getInstance());
         }
 
-        Multimap<String, WrappedSignedProperty> map = WrappedGameProfile.fromPlayer(player).getProperties();
-        for (String prop : map.asMap().keySet()) {
-            for (WrappedSignedProperty sp : map.get(prop)) {
-                signArr[0] = new SignatureData(sp.getName(), sp.getValue(), sp.getSignature());
+        User user = PacketEvents.getAPI().getPlayerManager().getUser(player);
+        if (user != null && user.getProfile() != null) {
+            for (TextureProperty tp : user.getProfile().getTextureProperties()) {
+                signArr[0] = new SignatureData(tp.getName(), tp.getValue(), tp.getSignature());
             }
         }
 

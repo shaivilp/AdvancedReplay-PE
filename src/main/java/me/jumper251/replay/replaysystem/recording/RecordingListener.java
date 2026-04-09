@@ -1,6 +1,6 @@
 package me.jumper251.replay.replaysystem.recording;
 
-import com.comphenix.protocol.wrappers.EnumWrappers;
+import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientEntityAction;
 import me.jumper251.replay.filesystem.ConfigManager;
 import me.jumper251.replay.filesystem.Messages;
 import me.jumper251.replay.listener.AbstractListener;
@@ -439,7 +439,9 @@ public class RecordingListener extends AbstractListener {
 		Player p = e.getPlayer();
 		if (VersionUtil.isAbove(VersionEnum.V1_21) && this.recorder.getPlayers().contains(p.getName())) {
 
-			EnumWrappers.PlayerAction action = e.isSneaking() ? EnumWrappers.PlayerAction.START_SNEAKING : EnumWrappers.PlayerAction.STOP_SNEAKING;
+			WrapperPlayClientEntityAction.Action action = e.isSneaking()
+					? WrapperPlayClientEntityAction.Action.START_SNEAKING
+					: WrapperPlayClientEntityAction.Action.STOP_SNEAKING;
 			this.packetRecorder.addData(p.getName(), new EntityActionData(action));
 		}
 	}

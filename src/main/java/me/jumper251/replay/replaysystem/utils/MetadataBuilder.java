@@ -1,49 +1,82 @@
 package me.jumper251.replay.replaysystem.utils;
 
 
-import com.comphenix.protocol.wrappers.EnumWrappers;
-import com.comphenix.protocol.wrappers.EnumWrappers.EntityPose;
-import com.comphenix.protocol.wrappers.WrappedDataWatcher;
+import com.github.retrooper.packetevents.protocol.entity.data.EntityData;
+import com.github.retrooper.packetevents.protocol.entity.data.EntityDataType;
+import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes;
+import com.github.retrooper.packetevents.protocol.entity.pose.EntityPose;
+import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import me.jumper251.replay.utils.VersionUtil;
 import me.jumper251.replay.utils.VersionUtil.VersionEnum;
 import org.bukkit.entity.Entity;
 
-import java.lang.reflect.Method;
-
+import java.util.ArrayList;
+import java.util.List;
 
 public class MetadataBuilder {
 
-    private WrappedDataWatcher data;
+    private final List<EntityData<?>> entries;
 
     public MetadataBuilder(Entity en) {
-        this.data = WrappedDataWatcher.getEntityWatcher(en).deepClone();
+        List<EntityData<?>> from = SpigotConversionUtil.getEntityMetadata(en);
+        this.entries = new ArrayList<>();
+        for (EntityData<?> ed : from) {
+            this.entries.add(cloneEntry(ed));
+        }
     }
 
-    public MetadataBuilder(WrappedDataWatcher data) {
-        this.data = data;
+    public MetadataBuilder(List<EntityData<?>> data) {
+        this.entries = new ArrayList<>();
+        for (EntityData<?> ed : data) {
+            this.entries.add(cloneEntry(ed));
+        }
     }
 
     public MetadataBuilder() {
-        this.data = new WrappedDataWatcher();
+        this.entries = new ArrayList<>();
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static EntityData<?> cloneEntry(EntityData<?> ed) {
+        return new EntityData(ed.getIndex(), ed.getType(), ed.getValue());
+    }
+
+    private void removeIndex(int index) {
+        entries.removeIf(e -> e.getIndex() == index);
+    }
+
+    private <T> void put(int index, EntityDataType<T> type, T value) {
+        removeIndex(index);
+        entries.add(new EntityData<>(index, type, value));
     }
 
     public MetadataBuilder setValue(int index, Object value) {
-        this.data.setObject(index, value);
+        if (value instanceof Byte) {
+            put(index, EntityDataTypes.BYTE, (Byte) value);
+        } else if (value instanceof Integer) {
+            put(index, EntityDataTypes.INT, (Integer) value);
+        } else if (value instanceof Float) {
+            put(index, EntityDataTypes.FLOAT, (Float) value);
+        } else if (value instanceof Boolean) {
+            put(index, EntityDataTypes.BOOLEAN, (Boolean) value);
+        } else {
+            throw new IllegalArgumentException("Unsupported metadata value type: " + value.getClass());
+        }
         return this;
     }
 
     public MetadataBuilder setByte(int index, byte value) {
-        this.data.setByte(index, value, false);
+        put(index, EntityDataTypes.BYTE, value);
         return this;
     }
 
     public MetadataBuilder setBoolean(int index, boolean value) {
-        this.data.setBoolean(index, value, false);
+        put(index, EntityDataTypes.BOOLEAN, value);
         return this;
     }
 
     public MetadataBuilder setInteger(int index, int value) {
-        this.data.setInteger(index, value, false);
+        put(index, EntityDataTypes.INT, value);
         return this;
     }
 
@@ -58,23 +91,19 @@ public class MetadataBuilder {
     public MetadataBuilder resetValue() {
         if (VersionUtil.isAbove(VersionEnum.V1_14)) {
             return setByte(0, (byte) 0).setPoseField("STANDING");
-        } else {
-            return setValue(0, (byte) 0);
         }
+        return setValue(0, (byte) 0);
     }
 
     public MetadataBuilder setArrows(int amount) {
-
         if (VersionUtil.isBetween(VersionEnum.V1_10, VersionEnum.V1_13)) {
             return setValue(10, amount);
         } else if (VersionUtil.isBetween(VersionEnum.V1_14, VersionEnum.V1_16)) {
             return setValue(11, amount);
         } else if (VersionUtil.isAbove(VersionEnum.V1_17)) {
             return setValue(12, amount);
-        } else {
-            return setValue(9, amount);
         }
-
+        return setValue(9, amount);
     }
 
     public MetadataBuilder setGlowing() {
@@ -90,7 +119,7 @@ public class MetadataBuilder {
     }
 
     public MetadataBuilder setHealth(float amount) {
-        return setValue(7, amount); //Might be Version problems with field numbers http://wiki.vg/Entity_metadata
+        return setValue(7, amount);
     }
 
     public MetadataBuilder setAir(int amount) {
@@ -98,46 +127,34 @@ public class MetadataBuilder {
     }
 
     public MetadataBuilder enableSkinParts() {
-        if (VersionUtil.isBetween(VersionEnum.V1_9, VersionEnum.V1_20)) return this;
-
-        byte skinFlags = 0x01 | 0x02 | 0x04 | 0x08 | 0x10 | 0x20 | 0x40;
+        if (VersionUtil.isBetween(VersionEnum.V1_9, VersionEnum.V1_20)) {
+            return this;
+        }
+        byte skinFlags = (byte) (0x01 | 0x02 | 0x04 | 0x08 | 0x10 | 0x20 | 0x40);
         if (VersionUtil.isCompatible(VersionEnum.V1_8)) {
             return setValue(10, skinFlags);
         } else if (VersionUtil.isBetween(VersionEnum.V1_9, VersionEnum.V1_21)) {
             return setByte(17, skinFlags);
-        } else {
-            return setByte(16, skinFlags);
         }
-
+        return setByte(16, skinFlags);
     }
 
-    public WrappedDataWatcher getData() {
+    public List<EntityData<?>> getData() {
         enableSkinParts();
-
-        return this.data;
+        return new ArrayList<>(entries);
     }
 
     public MetadataBuilder setPoseField(String type) {
-        if (VersionUtil.isAbove(VersionEnum.V1_20)) {
-            EntityPose pose = EntityPose.valueOf(type);
-            this.data.setObject(new WrappedDataWatcher.WrappedDataWatcherObject(6, WrappedDataWatcher.Registry.get(EnumWrappers.getEntityPoseClass(), false)), pose.toNms());
+        if (!VersionUtil.isAbove(VersionEnum.V1_14)) {
             return this;
-        } else if (VersionUtil.isAbove(VersionEnum.V1_17)) {
-            return setValue(6, EntityPose.valueOf(type).toNms());
         }
-
-        Object enumField = null;
-
-        try {
-            Class<?> entityPose = Class.forName("net.minecraft.server." + VersionUtil.VERSION + ".EntityPose");
-
-            Method valueOf = entityPose.getMethod("valueOf", String.class);
-            enumField = valueOf.invoke(null, type);
-
-        } catch (Exception e) {
-            e.printStackTrace();
+        EntityPose pose;
+        if ("SNEAKING".equals(type)) {
+            pose = EntityPose.CROUCHING;
+        } else {
+            pose = EntityPose.valueOf(type);
         }
-
-        return setValue(6, enumField);
+        put(6, EntityDataTypes.ENTITY_POSE, pose);
+        return this;
     }
 }

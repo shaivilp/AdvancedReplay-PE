@@ -182,7 +182,10 @@ public class Replayer {
 	public void stop() {
 		sendMessage(Messages.REPLAYING_FINISHED_WATCHING.getBuilder());
 		
-		this.run.cancel();
+		if (this.run != null) {
+			this.run.cancel();
+			this.run = null;
+		}
 		this.getReplay().getData().getActions().clear();
 		
 		for (INPC npc : this.npcs.values()) {

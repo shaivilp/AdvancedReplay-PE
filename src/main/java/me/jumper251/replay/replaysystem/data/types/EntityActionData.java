@@ -1,23 +1,18 @@
 package me.jumper251.replay.replaysystem.data.types;
 
-import com.comphenix.protocol.wrappers.EnumWrappers.PlayerAction;
+import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientEntityAction;
 
 public class EntityActionData extends PacketData {
 
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = 7841723539864388570L;
-	
-	
-	private PlayerAction action;
-	
-	public EntityActionData(PlayerAction action) {
-		this.action = action;
-	}
-	
-	public PlayerAction getAction() {
-		return action;
-	}
+    private static final long serialVersionUID = 7841723539864388570L;
 
+    private WrapperPlayClientEntityAction.Action action;
+
+    public EntityActionData(WrapperPlayClientEntityAction.Action action) {
+        this.action = action;
+    }
+
+    public WrapperPlayClientEntityAction.Action getAction() {
+        return action;
+    }
 }

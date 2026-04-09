@@ -1,426 +1,404 @@
 package me.jumper251.replay.replaysystem.utils.entities;
 
-import java.util.*;
-
-
-import com.comphenix.packetwrapper.*;
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.ProtocolLibrary;
-import com.comphenix.protocol.events.InternalStructure;
-import com.comphenix.protocol.events.PacketContainer;
-import com.comphenix.protocol.wrappers.*;
-import com.google.common.collect.Lists;
-import org.bukkit.Location;
-import org.bukkit.entity.Player;
-
-import com.comphenix.packetwrapper.WrapperPlayServerScoreboardTeam.Mode;
-import com.comphenix.packetwrapper.v15.WrapperPlayServerRelEntityMoveLook;
-
+import com.github.retrooper.packetevents.protocol.entity.data.EntityData;
+import com.github.retrooper.packetevents.protocol.player.GameMode;
+import com.github.retrooper.packetevents.protocol.player.UserProfile;
+import com.github.retrooper.packetevents.util.Vector3d;
+import com.github.retrooper.packetevents.util.Vector3i;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityAnimation;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityHeadLook;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityRelativeMoveAndRotation;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityRotation;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityTeleport;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerHurtAnimation;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoRemove;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerTeams;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerUseBed;
 import me.jumper251.replay.replaysystem.utils.NPCManager;
 import me.jumper251.replay.utils.MathUtils;
+import me.jumper251.replay.utils.PacketEventsUtil;
 import me.jumper251.replay.utils.StringUtils;
 import me.jumper251.replay.utils.VersionUtil;
 import me.jumper251.replay.utils.VersionUtil.VersionEnum;
-import org.bukkit.util.Vector;
+import net.kyori.adventure.text.Component;
+import org.bukkit.Location;
+import org.bukkit.entity.Player;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.UUID;
 
-public class PacketNPC implements INPC{
+public class PacketNPC implements INPC {
 
-	private int id;
+    private int id;
 
-	private UUID uuid;
-	
-	private String name;
-	
-	private int tabMode;
-	
-	private WrappedDataWatcher data;
-	
-	private WrappedGameProfile profile;
-	
-	private Location location, origin;
-	
-	private NPCSpawnPacket spawnPacket;
-	
-	private float yaw, pitch;
-	
-	private Player[] visible;
-	
-	private Player oldVisible;
-	
-	private List<WrapperPlayServerEntityEquipment> lastEquipment;
-	
-	public PacketNPC(int id, UUID uuid, String name) {
-		this.id = id;
-		this.uuid = uuid;
-		this.name = name;
-		this.tabMode = 1;
-		this.lastEquipment = new ArrayList<>();
-		this.visible = new Player[]{};
+    private UUID uuid;
 
-        if (VersionUtil.isAbove(VersionEnum.V1_20)) {
-			this.spawnPacket = new NPCSpawnPacket(new WrapperPlayServerSpawnEntity());
-		} else {
-			this.spawnPacket = new NPCSpawnPacket(new WrapperPlayServerNamedEntitySpawn());
-		}
-	}
-	
-	public PacketNPC() {
-		this(MathUtils.randInt(50000, 400000), UUID.randomUUID(), StringUtils.getRandomString(6));
-	}
-	
-	public void spawn(Location loc, int tabMode, Player... players) {
-		this.tabMode = tabMode;
-		this.visible = players;
-		this.oldVisible = players[0];
-		this.location = loc;
-		this.origin = loc;
-		NPCManager.names.add(this.name);
+    private String name;
 
-		this.spawnPacket.setEntityID(this.id);
-		this.spawnPacket.setUniqueId(uuid);
-		this.spawnPacket.setPosition(loc.toVector());
-		this.spawnPacket.setYaw(this.yaw);
-		this.spawnPacket.setPitch(this.pitch);
-	
-		if(this.data != null) this.spawnPacket.setMetadata(this.data);
-		
-		for(Player player : players) {
-			if(tabMode != 0) {
-				getInfoAddPacket().sendPacket(player);
-			}
-			this.spawnPacket.sendPacket(player);
+    private int tabMode;
 
-			if(tabMode == 1) {
-				getInfoRemovePacket().sendPacket(player);
-			}
-		}
-		
-	}
-	
-	public void respawn(Player... players) {
-		this.visible = players;
-		this.spawnPacket.setMetadata(this.data);
-		this.spawnPacket.setPosition(this.location.toVector());
+    private List<EntityData<?>> data;
+
+    private UserProfile profile;
+
+    private Location location;
+
+    private Location origin;
+
+    private NPCSpawnPacket spawnPacket;
+
+    private float yaw;
+
+    private float pitch;
+
+    private Player[] visible;
+
+    private Player oldVisible;
+
+    private List<com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityEquipment> lastEquipment;
+
+    public PacketNPC(int id, UUID uuid, String name) {
+        this.id = id;
+        this.uuid = uuid;
+        this.name = name;
+        this.tabMode = 1;
+        this.lastEquipment = new ArrayList<>();
+        this.visible = new Player[]{};
+        this.spawnPacket = new NPCSpawnPacket(VersionUtil.isAbove(VersionEnum.V1_20));
+    }
+
+    public PacketNPC() {
+        this(MathUtils.randInt(50000, 400000), UUID.randomUUID(), StringUtils.getRandomString(6));
+    }
+
+    private UserProfile effectiveProfile() {
+        if (profile != null) {
+            return profile;
+        }
+        return new UserProfile(uuid, name);
+    }
+
+    private void sendTabAdd(Player player) {
+        UserProfile up = effectiveProfile();
+        if (VersionUtil.isAbove(VersionEnum.V1_19)) {
+            EnumSet<WrapperPlayServerPlayerInfoUpdate.Action> actions = EnumSet.of(
+                    WrapperPlayServerPlayerInfoUpdate.Action.ADD_PLAYER,
+                    WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_LISTED,
+                    WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_GAME_MODE,
+                    WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_LATENCY,
+                    WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_DISPLAY_NAME);
+            WrapperPlayServerPlayerInfoUpdate.PlayerInfo info = new WrapperPlayServerPlayerInfoUpdate.PlayerInfo(
+                    up, true, 1, GameMode.CREATIVE, Component.text(name), null);
+            PacketEventsUtil.sendPacket(player, new WrapperPlayServerPlayerInfoUpdate(actions, Collections.singletonList(info)));
+        } else {
+            WrapperPlayServerPlayerInfo.PlayerData dataRow = new WrapperPlayServerPlayerInfo.PlayerData(
+                    Component.text(name), up, GameMode.CREATIVE, 1);
+            PacketEventsUtil.sendPacket(player, new WrapperPlayServerPlayerInfo(
+                    WrapperPlayServerPlayerInfo.Action.ADD_PLAYER, Collections.singletonList(dataRow)));
+        }
+    }
+
+    private void sendTabRemove(Player player) {
+        UserProfile up = effectiveProfile();
+        if (VersionUtil.isAbove(VersionEnum.V1_19)) {
+            PacketEventsUtil.sendPacket(player, new WrapperPlayServerPlayerInfoRemove(Collections.singletonList(up.getUUID())));
+        } else {
+            WrapperPlayServerPlayerInfo.PlayerData dataRow = new WrapperPlayServerPlayerInfo.PlayerData(
+                    null, up, null, -1);
+            PacketEventsUtil.sendPacket(player, new WrapperPlayServerPlayerInfo(
+                    WrapperPlayServerPlayerInfo.Action.REMOVE_PLAYER, Collections.singletonList(dataRow)));
+        }
+    }
+
+    @Override
+    public void spawn(Location loc, int tabMode, Player... players) {
+        this.tabMode = tabMode;
+        this.visible = players;
+        this.oldVisible = players[0];
+        this.location = loc;
+        this.origin = loc;
+        NPCManager.names.add(this.name);
+
+        this.spawnPacket.setEntityID(this.id);
+        this.spawnPacket.setUniqueId(uuid);
+        this.spawnPacket.setPosition(loc.toVector());
         this.spawnPacket.setYaw(this.yaw);
         this.spawnPacket.setPitch(this.pitch);
-		
-		for (Player player : this.visible) {
-			this.spawnPacket.sendPacket(player);
-			
-			for (WrapperPlayServerEntityEquipment equipment : this.lastEquipment) {
-				equipment.sendPacket(player);
-			}
-		}
+
+        if (this.data != null) {
+            this.spawnPacket.setMetadata(this.data);
+        }
+
+        for (Player player : players) {
+            if (tabMode != 0) {
+                sendTabAdd(player);
+            }
+            this.spawnPacket.sendPacket(player);
+
+            if (tabMode == 1) {
+                sendTabRemove(player);
+            }
+        }
+    }
+
+    @Override
+    public void respawn(Player... players) {
+        this.visible = players;
+        this.spawnPacket.setMetadata(this.data);
+        this.spawnPacket.setPosition(this.location.toVector());
+        this.spawnPacket.setYaw(this.yaw);
+        this.spawnPacket.setPitch(this.pitch);
+
+        for (Player player : this.visible) {
+            this.spawnPacket.sendPacket(player);
+
+            for (com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityEquipment equipment : this.lastEquipment) {
+                PacketEventsUtil.sendPacket(player, equipment);
+            }
+        }
 
         this.look(this.yaw, this.pitch);
         this.updateMetadata();
-	}
-	
-	public void despawn() {
-		WrapperPlayServerEntityDestroy destroyPacket = new WrapperPlayServerEntityDestroy();
-		
-		if (VersionUtil.isAbove(VersionEnum.V1_17)) {
-			destroyPacket.getHandle().getIntLists().write(0, Arrays.asList(this.id));
-		} else {
-			destroyPacket.setEntityIds(new int[] { this.id });
-		}		
-		
-		for (Player player : this.visible) {
-			if(player != null){				
-				destroyPacket.sendPacket(player);
-			}
-		}
-		
-		Arrays.fill(this.visible, null);
-		
-	}
-	
-	public void remove() {
+    }
+
+    @Override
+    public void despawn() {
+        WrapperPlayServerDestroyEntities destroyPacket = new WrapperPlayServerDestroyEntities(this.id);
+
+        for (Player player : this.visible) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, destroyPacket);
+            }
+        }
+
+        Arrays.fill(this.visible, null);
+    }
+
+    @Override
+    public void remove() {
         NPCManager.names.remove(this.name);
-		
-		WrapperPlayServerEntityDestroy destroyPacket = new WrapperPlayServerEntityDestroy();
-		
-		if (VersionUtil.isAbove(VersionEnum.V1_17)) {
-			destroyPacket.getHandle().getIntLists().write(0, Arrays.asList(this.id));
-		} else {
-			destroyPacket.setEntityIds(new int[] { this.id });
-		}	
-		
-		if(this.oldVisible != null){				
-			if(this.tabMode == 2){
-				if (VersionUtil.isAbove(VersionEnum.V1_19)) {
-					ProtocolLibrary.getProtocolManager().sendServerPacket(this.oldVisible, getPlayerInfoRemovePacket());
-				} else {
-					getInfoRemovePacket().sendPacket(this.oldVisible);
-				}
-			}
-				
-			destroyPacket.sendPacket(this.oldVisible);
 
-		}
-		
-	}
-	
-	public void teleport(Location loc, boolean onGround) {
-		this.location = loc;
-		
-		WrapperPlayServerEntityTeleport packet = new WrapperPlayServerEntityTeleport();
+        WrapperPlayServerDestroyEntities destroyPacket = new WrapperPlayServerDestroyEntities(this.id);
 
-		packet.setEntityID(this.id);
-		if (VersionUtil.isAbove(VersionEnum.V1_21)) {
-			InternalStructure internalStructure = packet.getHandle().getStructures().getValues().get(0);
-			internalStructure.getVectors().write(0, new Vector(loc.getX(), loc.getY(), loc.getZ()));
-			internalStructure.getFloat().write(0, loc.getYaw());
-			internalStructure.getFloat().write(1, loc.getPitch());
-		} else {
-			packet.setX(loc.getX());
-			packet.setY(loc.getY());
-			packet.setZ(loc.getZ());
+        if (this.oldVisible != null) {
+            if (this.tabMode == 2) {
+                sendTabRemove(this.oldVisible);
+            }
 
-			packet.setPitch(loc.getPitch());
-			packet.setYaw(loc.getYaw());
-		}
-		packet.setOnGround(onGround);
-		
-		for(Player player : this.visible) {
-			if(player != null) {
-				packet.sendPacket(player);
-			}
-		}
-	}
-	
-	public void move(Location loc, boolean onGround, float yaw, float pitch) {
-		WrapperPlayServerRelEntityMoveLook packet = new WrapperPlayServerRelEntityMoveLook();
-		WrapperPlayServerEntityHeadRotation head = new WrapperPlayServerEntityHeadRotation();
+            PacketEventsUtil.sendPacket(this.oldVisible, destroyPacket);
+        }
+    }
 
-		packet.setEntityID(this.id);
+    @Override
+    public void teleport(Location loc, boolean onGround) {
+        this.location = loc;
 
-		head.setEntityID(this.id);
-		head.setHeadYaw(((byte)(yaw * 256 / 360)));
-		
-		packet.setDx((short) ((loc.getX() * 32 - this.location.getX() * 32) * 128));
-		packet.setDy((short) ((loc.getY() * 32 - this.location.getY() * 32) * 128));
-		packet.setDz((short) ((loc.getZ() * 32 - this.location.getZ() * 32) * 128));
-		packet.setPitch(pitch);
-		packet.setYaw(yaw);
+        WrapperPlayServerEntityTeleport packet = new WrapperPlayServerEntityTeleport(
+                this.id,
+                new Vector3d(loc.getX(), loc.getY(), loc.getZ()),
+                loc.getYaw(),
+                loc.getPitch(),
+                onGround
+        );
 
-		this.location = loc;
+        for (Player player : this.visible) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, packet);
+            }
+        }
+    }
+
+    @Override
+    public void move(Location loc, boolean onGround, float yaw, float pitch) {
+        double dx = loc.getX() - this.location.getX();
+        double dy = loc.getY() - this.location.getY();
+        double dz = loc.getZ() - this.location.getZ();
+        WrapperPlayServerEntityRelativeMoveAndRotation packet = new WrapperPlayServerEntityRelativeMoveAndRotation(
+                this.id, dx, dy, dz, yaw, pitch, onGround);
+        WrapperPlayServerEntityHeadLook head = new WrapperPlayServerEntityHeadLook(this.id, yaw);
+
+        this.location = loc;
         this.yaw = yaw;
         this.pitch = pitch;
 
-		for(Player player : this.visible) {
-			if(player != null) {
-				packet.sendPacket(player);
-				head.sendPacket(player);
-			}
-		}
-	}
-	
-	public void look(float yaw, float pitch) {
-		  WrapperPlayServerEntityLook lookPacket = new WrapperPlayServerEntityLook();
-		  WrapperPlayServerEntityHeadRotation head = new WrapperPlayServerEntityHeadRotation();
-		  
-		  head.setEntityID(this.id);
-		  head.setHeadYaw(((byte)(yaw * 256 / 360)));
-		  lookPacket.setEntityID(this.id);
-		  lookPacket.setOnGround(true);
-		  lookPacket.setPitch(pitch);
-		  lookPacket.setYaw(yaw);
-		  
-		  for(Player player : this.visible) {
-			  if(player != null) {
-				  lookPacket.sendPacket(player);
-				  head.sendPacket(player);
-			  }
-		  }
-	}
-	
-	public void updateMetadata() {
-		WrapperPlayServerEntityMetadata packet = new WrapperPlayServerEntityMetadata();
-		
-		packet.setEntityID(this.id);
-		if (VersionUtil.isAbove(VersionEnum.V1_19)) {
-			// https://www.spigotmc.org/threads/unable-to-modify-entity-metadata-packet-using-protocollib-1-19-3.582442/
-			List<WrappedDataValue> wrappedDataValueList = Lists.newArrayList();
-			this.data.getWatchableObjects().stream().filter(Objects::nonNull).forEach(entry -> {
-				WrappedDataWatcher.WrappedDataWatcherObject dataWatcherObject = entry.getWatcherObject();
-				wrappedDataValueList.add(new WrappedDataValue(dataWatcherObject.getIndex(), dataWatcherObject.getSerializer(), entry.getRawValue()));
-			});
-			packet.getHandle().getDataValueCollectionModifier().write(0, wrappedDataValueList);
-		} else {
-			packet.setMetadata(this.data.getWatchableObjects());
-		}
-		
-		for (Player player : this.visible) {
-			if (player != null) {
-				packet.sendPacket(player);
-			}
-		}
-	}
-	
-	public void animate(int id) {
-		if (id == 1 && VersionUtil.isAbove(VersionEnum.V1_20)) {
-			hurt();
-			return;
-		}
+        for (Player player : this.visible) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, packet);
+                PacketEventsUtil.sendPacket(player, head);
+            }
+        }
+    }
 
-		WrapperPlayServerAnimation packet = new WrapperPlayServerAnimation();
-		
-		packet.setEntityID(this.id);
-		packet.setAnimation(id);
-		
-		for (Player player : this.visible) {
-			if (player != null) {
-				packet.sendPacket(player);
-			}
-		}
-	}
+    @Override
+    public void look(float yaw, float pitch) {
+        WrapperPlayServerEntityRotation lookPacket = new WrapperPlayServerEntityRotation(this.id, yaw, pitch, true);
+        WrapperPlayServerEntityHeadLook head = new WrapperPlayServerEntityHeadLook(this.id, yaw);
 
-	private void hurt() {
-		PacketContainer packet = new PacketContainer(PacketType.Play.Server.HURT_ANIMATION);
-		packet.getIntegers().write(0, this.id);
+        for (Player player : this.visible) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, lookPacket);
+                PacketEventsUtil.sendPacket(player, head);
+            }
+        }
+    }
 
-		for (Player player : this.visible) {
-			if (player != null) {
-				ProtocolLibrary.getProtocolManager().sendServerPacket(player, packet);
-			}
-		}
-	}
-	
-	public void sleep(Location loc) {
-		WrapperPlayServerBed packet = new WrapperPlayServerBed();
-		
-		packet.setEntityID(this.id);
-		packet.setLocation(new BlockPosition(loc.toVector()));
-		
-		for (Player player : this.visible) {
-			if (player != null) {
-				packet.sendPacket(player);
-			}
-		}
-	}
-	
-	
-	public void addToTeam(String team) {
-		WrapperPlayServerScoreboardTeam packet = new WrapperPlayServerScoreboardTeam();
-		
-		packet.setName(team);
-		packet.setMode(Mode.PLAYERS_ADDED);
-		packet.setPlayers(Arrays.asList(this.name));
-		
-		for(Player player : this.visible) {
-			if(player != null) {
-				packet.sendPacket(player);
-			}
-		}
-	}
-	
-	public WrapperPlayServerPlayerInfo getInfoAddPacket() {
-		WrapperPlayServerPlayerInfo infoPacket = new WrapperPlayServerPlayerInfo();
-		infoPacket.setAction(EnumWrappers.PlayerInfoAction.ADD_PLAYER);
-		
-		WrappedGameProfile profile = this.profile != null ? this.profile : new WrappedGameProfile(this.uuid, this.name);
-		PlayerInfoData data = new PlayerInfoData(profile, 1, EnumWrappers.NativeGameMode.CREATIVE, WrappedChatComponent.fromText(this.name));
-		List<PlayerInfoData> dataList = new ArrayList<>();
-		dataList.add(data);
-		
-		infoPacket.setData(dataList);	
-		return infoPacket;
-	}
+    @Override
+    public void updateMetadata() {
+        if (this.data == null) {
+            return;
+        }
+        WrapperPlayServerEntityMetadata packet = new WrapperPlayServerEntityMetadata(this.id, this.data);
 
-	public WrapperPlayServerPlayerInfo getInfoRemovePacket() {
-		WrapperPlayServerPlayerInfo infoPacket = new WrapperPlayServerPlayerInfo();
-		infoPacket.setAction(EnumWrappers.PlayerInfoAction.REMOVE_PLAYER);
+        for (Player player : this.visible) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, packet);
+            }
+        }
+    }
 
-		WrappedGameProfile profile = this.profile != null ? this.profile : new WrappedGameProfile(this.uuid, this.name);
-		PlayerInfoData data = new PlayerInfoData(profile, 1, EnumWrappers.NativeGameMode.CREATIVE, WrappedChatComponent.fromText(this.name));
-		List<PlayerInfoData> dataList = new ArrayList<>();
-		dataList.add(data);
+    @Override
+    public void animate(int id) {
+        if (id == 1 && VersionUtil.isAbove(VersionEnum.V1_20)) {
+            hurt();
+            return;
+        }
 
-		infoPacket.setData(dataList);
-		return infoPacket;
-	}
+        WrapperPlayServerEntityAnimation.EntityAnimationType[] types = WrapperPlayServerEntityAnimation.EntityAnimationType.values();
+        WrapperPlayServerEntityAnimation.EntityAnimationType type = (id >= 0 && id < types.length)
+                ? types[id]
+                : WrapperPlayServerEntityAnimation.EntityAnimationType.SWING_MAIN_ARM;
+        WrapperPlayServerEntityAnimation packet = new WrapperPlayServerEntityAnimation(this.id, type);
 
-	private PacketContainer getPlayerInfoRemovePacket() {
-		PacketContainer packet = new PacketContainer(PacketType.Play.Server.PLAYER_INFO_REMOVE);
-		packet.getModifier().writeDefaults();
-		packet.getModifier().withType(List.class).write(0, Collections.singletonList(uuid));
+        for (Player player : this.visible) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, packet);
+            }
+        }
+    }
 
-		return packet;
-	}
-	
-	public int getId() {
-		return id;
-	}
-	
-	public WrapperPlayServerNamedEntitySpawn getSpawnPacket() {
-		return null;
-	}
-	
-	public String getName() {
-		return name;
-	}
-	
-	public UUID getUuid() {
-		return uuid;
-	}
-	
-	public void setId(int id) {
-		this.id = id;
-	}
-	
-	public void setName(String name) {
-		this.name = name;
-	}
-	
-	public void setUuid(UUID uuid) {
-		this.uuid = uuid;
-	}
-	
-	public void setData(WrappedDataWatcher data) {
-		this.data = data;
-	}
-	
-	public WrappedDataWatcher getData() {
-		return data;
-	}
-	
-	public void setProfile(WrappedGameProfile profile) {
-		this.profile = profile;
-	}
-	
-	public void setPitch(float pitch) {
-		this.pitch = pitch;
-	}
-	
-	public void setYaw(float yaw) {
-		this.yaw = yaw;
-	}
-	
-	public Location getLocation() {
-		return location;
-	}
-	
-	public void setOrigin(Location origin) {
-		this.origin = origin;
-	}
-	
+    private void hurt() {
+        WrapperPlayServerHurtAnimation packet = new WrapperPlayServerHurtAnimation(this.id, this.yaw);
+        for (Player player : this.visible) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, packet);
+            }
+        }
+    }
 
-	public void setLocation(Location location) {
-		this.location = location;
-	}
-	
-	public Location getOrigin() {
-		return origin;
-	}
-	
-	public Player[] getVisible() {
-		return this.visible;
-	}
-	
-	public void setLastEquipment(List<WrapperPlayServerEntityEquipment> list) {
-		this.lastEquipment = list;
-		
-	}
+    @Override
+    public void sleep(Location loc) {
+        WrapperPlayServerUseBed packet = new WrapperPlayServerUseBed(this.id,
+                new Vector3i(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ()));
+
+        for (Player player : this.visible) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, packet);
+            }
+        }
+    }
+
+    @Override
+    public void addToTeam(String team) {
+        WrapperPlayServerTeams packet = new WrapperPlayServerTeams(team, WrapperPlayServerTeams.TeamMode.ADD_ENTITIES,
+                (WrapperPlayServerTeams.ScoreBoardTeamInfo) null, Collections.singletonList(this.name));
+
+        for (Player player : this.visible) {
+            if (player != null) {
+                PacketEventsUtil.sendPacket(player, packet);
+            }
+        }
+    }
+
+    @Override
+    public int getId() {
+        return id;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public UUID getUuid() {
+        return uuid;
+    }
+
+    @Override
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    @Override
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public void setUuid(UUID uuid) {
+        this.uuid = uuid;
+    }
+
+    @Override
+    public void setData(List<EntityData<?>> data) {
+        this.data = data;
+    }
+
+    @Override
+    public List<EntityData<?>> getData() {
+        return data;
+    }
+
+    @Override
+    public void setProfile(UserProfile profile) {
+        this.profile = profile;
+    }
+
+    @Override
+    public void setPitch(float pitch) {
+        this.pitch = pitch;
+    }
+
+    @Override
+    public void setYaw(float yaw) {
+        this.yaw = yaw;
+    }
+
+    @Override
+    public Location getLocation() {
+        return location;
+    }
+
+    @Override
+    public void setOrigin(Location origin) {
+        this.origin = origin;
+    }
+
+    @Override
+    public void setLocation(Location location) {
+        this.location = location;
+    }
+
+    @Override
+    public Location getOrigin() {
+        return origin;
+    }
+
+    @Override
+    public Player[] getVisible() {
+        return this.visible;
+    }
+
+    @Override
+    public void setLastEquipment(List<com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityEquipment> list) {
+        this.lastEquipment = list;
+    }
 }

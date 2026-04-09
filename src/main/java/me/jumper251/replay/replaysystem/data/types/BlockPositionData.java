@@ -1,6 +1,6 @@
 package me.jumper251.replay.replaysystem.data.types;
 
-import com.comphenix.protocol.wrappers.BlockPosition;
+import com.github.retrooper.packetevents.util.Vector3i;
 
 import java.io.Serializable;
 
@@ -30,12 +30,12 @@ public class BlockPositionData implements Serializable {
         return z;
     }
 
-    public static BlockPositionData fromBlockPosition(BlockPosition blockPosition) {
-        return new BlockPositionData(blockPosition.getX(), blockPosition.getY(), blockPosition.getZ());
+    public static BlockPositionData fromVector3i(Vector3i pos) {
+        return new BlockPositionData(pos.getX(), pos.getY(), pos.getZ());
     }
 
-    public BlockPosition toBlockPosition() {
-        return new BlockPosition(x, y, z);
+    public Vector3i toVector3i() {
+        return new Vector3i(x, y, z);
     }
 
     @Override
