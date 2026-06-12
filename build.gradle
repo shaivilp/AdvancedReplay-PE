@@ -1,0 +1,77 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '8.3.0'
+    id 'maven-publish'
+}
+
+
+repositories {
+    mavenCentral()
+    maven { url = "https://hub.spigotmc.org/nexus/content/repositories/snapshots/" }
+    maven { url = uri("https://repo.codemc.io/repository/maven-releases/") }
+    maven { url = uri("https://repo.codemc.io/repository/maven-snapshots/") }
+    maven { url = uri("https://repo.alessiodp.com/releases/") }
+    maven { url = uri("https://repo.alessiodp.com/snapshots/") }
+    maven { url = 'https://s01.oss.sonatype.org/content/repositories/snapshots/' }
+}
+
+dependencies {
+    implementation project(':legacy')
+
+    compileOnly "org.spigotmc:spigot-api:1.21.11-R0.1-SNAPSHOT"
+    compileOnly 'com.github.retrooper:packetevents-spigot:2.12.0'
+
+    // Dependency resolver at runtime
+    implementation 'com.alessiodp.libby:libby-bukkit:2.0.0-SNAPSHOT'
+    // S3 storage backend
+    compileOnly 'io.minio:minio:8.5.12'
+}
+
+allprojects {
+    group = 'me.jumper251.replay'
+    version = '1.8.18'
+
+    apply plugin: 'java'
+    apply plugin: 'maven-publish'
+
+    java {
+        sourceCompatibility = 8
+        targetCompatibility = 8
+    }
+
+    compileJava {
+        options.encoding("UTF-8")
+        // Enforce the Java 8 platform API so no newer JDK API leaks into the bytecode
+        options.release = 8
+    }
+
+    publishing {
+        publications {
+            maven(MavenPublication) {
+                groupId project.group
+                artifactId project.name
+                version project.version
+                from components.java
+            }
+        }
+    }
+}
+
+shadowJar {
+    archiveFileName = 'Replay.jar'
+
+    relocate 'com.alessiodp.libby', 'me.jumper251.replay.libs.com.alessiodp.libby'
+}
+
+processResources {
+    def props = [version: version]
+    inputs.properties props
+    filteringCharset 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand props
+    }
+}
+
+build {
+    dependsOn shadowJar
+}

@@ -1,0 +1,37 @@
+name: AdvancedReplay
+version: '${version}'
+main: me.jumper251.replay.ReplaySystem
+author: Jumper251, Codins
+depend: [packetevents]
+api-version: 1.5
+commands:
+  replay:
+    description: Main Replay command
+    aliases: [rp]
+    permission: replay.command
+
+permissions:
+  replay.command:
+    description: Permission to use the replay command
+  replay.command.start:
+    default: op
+  replay.command.stop:
+    default: op
+  replay.command.info:
+    default: op
+  replay.command.play:
+    default: op
+  replay.command.reload:
+    default: op
+  replay.command.overview:
+    default: op
+  replay.command.list:
+    default: op
+  replay.command.migrate:
+    default: op
+  replay.command.delete:
+    default: op
+  replay.command.jump:
+    default: op
+  replay.admin:
+    description: Permission to receive update notifications

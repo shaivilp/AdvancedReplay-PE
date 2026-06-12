@@ -1,0 +1,331 @@
+package me.jumper251.replay.listener;
+
+
+
+import java.util.Arrays;
+
+
+import me.jumper251.replay.filesystem.*;
+import me.jumper251.replay.legacy.LegacyUtils;
+import me.jumper251.replay.utils.VersionUtil;
+import me.jumper251.replay.utils.version.MaterialBridge;
+import org.bukkit.Chunk;
+
+import org.bukkit.Material;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.FoodLevelChangeEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerPickupItemEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.PlayerToggleSneakEvent;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.scheduler.BukkitRunnable;
+
+
+import me.jumper251.replay.ReplaySystem;
+import me.jumper251.replay.replaysystem.replaying.ReplayHelper;
+import me.jumper251.replay.replaysystem.replaying.ReplayPacketListener;
+import me.jumper251.replay.replaysystem.replaying.Replayer;
+import me.jumper251.replay.replaysystem.utils.entities.INPC;
+
+
+public class ReplayListener extends AbstractListener {
+
+	@SuppressWarnings("deprecation")
+	@EventHandler (priority = EventPriority.MONITOR)
+	public void onInteract(PlayerInteractEvent e) {
+		if (e.getAction() == Action.RIGHT_CLICK_AIR || e.getAction() == Action.RIGHT_CLICK_BLOCK) {
+			Player p = e.getPlayer();
+			if (ReplayHelper.replaySessions.containsKey(p.getName())) {
+				e.setCancelled(true);
+				
+				Replayer replayer = ReplayHelper.replaySessions.get(p.getName());
+				if (p.getItemInHand() == null) return;
+				if (p.getItemInHand().getItemMeta() == null) return;
+				
+				ItemMeta meta = p.getItemInHand().getItemMeta();
+				ItemConfigType itemType = ItemConfig.getByIdAndName(p.getItemInHand().getType(), meta.getDisplayName().replaceAll("§", "&"));
+				
+				// Only the owner drives the timeline; joined viewers can teleport and leave.
+				boolean owner = replayer.isOwner(p);
+
+				if (itemType == ItemConfigType.PAUSE && owner) {
+					replayer.setPaused(!replayer.isPaused(), true);
+					ReplayHelper.sendTitle(p, " ", "§c❙❙", 20);
+				}
+
+				if (itemType == ItemConfigType.FORWARD && owner) {
+					replayer.getUtils().forward();
+					ReplayHelper.sendTitle(p, " ", "§a»»", 20);
+
+				}
+				if (itemType == ItemConfigType.BACKWARD && owner) {
+					replayer.getUtils().backward();
+					ReplayHelper.sendTitle(p, " ", "§c««", 20);
+
+				}
+
+
+				if (itemType == ItemConfigType.RESUME && owner) {
+					replayer.setPaused(!replayer.isPaused(), true);
+					ReplayHelper.sendTitle(p, " ", "§a➤", 20);
+
+				}
+
+				if (itemType == ItemConfigType.SPEED && owner) {
+					if (p.isSneaking()) {
+						if (replayer.getSpeed() < 1) {
+							replayer.setSpeed(1);
+						} else if (replayer.getSpeed() == 1) {
+							replayer.setSpeed(2);
+						}
+						
+					} else {
+						if (replayer.getSpeed() == 2) {
+							replayer.setSpeed(1);
+						} else if (replayer.getSpeed() ==  1) {
+							replayer.setSpeed(0.5D);
+						} else if (replayer.getSpeed() == 0.5D) {
+							 replayer.setSpeed(0.25D);
+						}
+					}
+					
+					
+				}
+				
+				if (itemType == ItemConfigType.LEAVE) {
+					if (owner) {
+						replayer.stop();
+					} else {
+						replayer.removeViewer(p);
+					}
+				}
+				
+				if (itemType == ItemConfigType.TELEPORT) {
+					ReplayHelper.createTeleporter(p, replayer, 1);
+				}
+				
+				ItemConfigOption pauseResume = ItemConfig.getItem(ItemConfigType.RESUME);
+				
+				if (itemType == ItemConfigType.PAUSE || itemType == ItemConfigType.RESUME) {
+					if (replayer.isPaused()) {
+						p.getInventory().setItem(pauseResume.getSlot(), ReplayHelper.getResumeItem());
+					} else {
+						p.getInventory().setItem(pauseResume.getSlot(), ReplayHelper.getPauseItem());
+					}
+				}
+				
+				
+				
+			}
+		}
+	}
+	
+	@SuppressWarnings("deprecation")
+	@EventHandler
+	public void onClick(InventoryClickEvent e) {
+        if (e.getWhoClicked() instanceof Player) {
+            Player p = (Player) e.getWhoClicked();
+            if (ReplayHelper.replaySessions.containsKey(p.getName())) {
+                e.setCancelled(true);
+
+                // Avoid IncompatibleClassChangeError < 1.21
+                String title = VersionUtil.isAbove(VersionUtil.VersionEnum.V1_21) ? e.getView().getTitle() : LegacyUtils.getInventoryTitle(e);
+
+                if (title.equalsIgnoreCase("§7Teleporter")) {
+                    Replayer replayer = ReplayHelper.replaySessions.get(p.getName());
+
+                    if (e.getCurrentItem() != null && e.getCurrentItem().getItemMeta() != null && e.getCurrentItem().getItemMeta().getDisplayName() != null) {
+                        if (e.getCurrentItem().getType() == MaterialBridge.PLAYER_HEAD.toMaterial()) {
+                            String owner = e.getCurrentItem().getItemMeta().getDisplayName().replaceAll("§6", "");
+                            if (replayer.getNPCList().containsKey(owner)) {
+                                INPC npc = replayer.getNPCList().get(owner);
+                                p.teleport(npc.getLocation());
+                            }
+                        } else if (e.getCurrentItem().getType() == Material.ARROW) {
+                            if (e.getSlot() == e.getInventory().getSize() - 1) {
+                                int nextPage = e.getCurrentItem().getAmount();
+                                ReplayHelper.createTeleporter(p, replayer, nextPage);
+                            } else if (e.getSlot() == e.getInventory().getSize() - 9) {
+                                int previousPage = e.getCurrentItem().getAmount();
+                                ReplayHelper.createTeleporter(p, replayer, previousPage);
+                            }
+                        }
+
+
+                    }
+                }
+            }
+        }
+    }
+
+	
+	@EventHandler
+	public void onFood(FoodLevelChangeEvent e){
+		Player p = (Player) e.getEntity();
+		if (ReplayHelper.replaySessions.containsKey(p.getName())) {
+			e.setFoodLevel(20);
+			e.setCancelled(true);
+		}
+	}
+	
+	@EventHandler
+	public void onDamage(EntityDamageEvent e){
+		if (e.getEntity() instanceof Player) {
+			Player p = (Player) e.getEntity();
+			if (ReplayHelper.replaySessions.containsKey(p.getName())) {
+				e.setCancelled(true);
+			}
+		}
+	}
+	
+	@EventHandler
+	public void onTeleport(PlayerTeleportEvent e){
+		Player p = e.getPlayer();
+		if (ReplayHelper.replaySessions.containsKey(p.getName())) {
+			Replayer replayer = ReplayHelper.replaySessions.get(p.getName());
+
+			// Refresh this viewer's view of every NPC without affecting the other viewers.
+			for (INPC npc : replayer.getNPCList().values()) {
+				npc.removeViewer(p);
+				npc.addViewer(p);
+			}
+		}
+	}
+
+	@EventHandler
+	public void onQuit(PlayerQuitEvent e) {
+		Player p = e.getPlayer();
+		if (ReplayHelper.replaySessions.containsKey(p.getName())) {
+			Replayer replayer = ReplayHelper.replaySessions.get(p.getName());
+			replayer.handleViewerQuit(p);
+		}
+
+	}
+	
+	@EventHandler
+	public void onPickup(PlayerPickupItemEvent e) {
+		Player p = e.getPlayer();
+		if (ReplayHelper.replaySessions.containsKey(p.getName())) {
+			e.setCancelled(true);
+		}
+		
+		boolean isReplayItem = ReplayHelper.replaySessions.values()
+				.stream()
+				.anyMatch(replayer -> replayer.getUtils().getEntities().containsValue(e.getItem()));
+		
+		if (isReplayItem) {
+			e.setCancelled(true);
+		}
+		
+	}
+	
+	@EventHandler
+	public void onDrop(PlayerDropItemEvent e) {
+		Player p = e.getPlayer();
+		if (ReplayHelper.replaySessions.containsKey(p.getName())) {
+			e.setCancelled(true);
+		}
+		
+	}
+	
+	@EventHandler
+	public void onMove(PlayerMoveEvent e) {
+		Player p = e.getPlayer();
+		if (ReplayHelper.replaySessions.containsKey(p.getName())) {
+			Chunk oldChunk = e.getFrom().getChunk();
+			Chunk newChunk = e.getTo().getChunk();
+			
+			if (oldChunk.getWorld() != newChunk.getWorld() || oldChunk.getX() != newChunk.getX() || oldChunk.getZ() != newChunk.getZ()) {
+				Replayer replayer = ReplayHelper.replaySessions.get(p.getName());
+				
+				for (INPC npc : replayer.getNPCList().values()) {
+					boolean visible = npc.getVisible() != null && Arrays.asList(npc.getVisible()).contains(p);
+					if (ReplayHelper.isInRange(npc.getLocation(), p.getLocation())) {
+						if (!visible) {
+							npc.addViewer(p);
+						}
+					} else {
+						if (visible) {
+							npc.removeViewer(p);
+						}
+					}
+				}
+			}
+			
+		}
+		
+	}
+	
+
+	@EventHandler
+	public void onWorldChange(PlayerChangedWorldEvent e) {
+		Player p = e.getPlayer();
+		if (ReplayHelper.replaySessions.containsKey(p.getName())) {
+			final Replayer replayer = ReplayHelper.replaySessions.get(p.getName());
+			
+			new BukkitRunnable() {
+				
+				@Override
+				public void run() {
+					for (INPC npc : replayer.getNPCList().values()) {
+
+						npc.removeViewer(p);
+
+						if (ReplayHelper.isInRange(p.getLocation(), npc.getLocation())) {
+							npc.addViewer(p);
+						}
+					}
+					
+				}
+			}.runTaskLater(ReplaySystem.getInstance(), 20);
+		}
+	}
+	
+	@EventHandler
+	public void onSneak(PlayerToggleSneakEvent e) {
+		Player p = e.getPlayer();
+		if (ReplayHelper.replaySessions.containsKey(p.getName())) {
+			ReplayPacketListener packetListener = ReplayHelper.replaySessions.get(p.getName()).getSession().getPacketListener();
+			
+			if (packetListener.getPrevious() != -1) {
+				packetListener.setCamera(p, p.getEntityId(), packetListener.getPrevious());
+				
+				p.setAllowFlight(true);
+			}
+		}
+
+
+	}
+
+	@EventHandler
+	public void onDeath(PlayerDeathEvent e) {
+		Player p = e.getEntity();
+		if (ReplayHelper.replaySessions.containsKey(p.getName())) {
+			e.setKeepLevel(true);
+			e.setKeepInventory(true);
+		}
+	}
+	
+	@EventHandler
+	public void onJoin(PlayerJoinEvent e) {
+		Player p = e.getPlayer();
+		
+		if(ConfigManager.UPDATE_NOTIFY){
+			if(ReplaySystem.updater.isVersionAvailable() && p.hasPermission("replay.admin")){
+				p.sendMessage(Messages.PREFIX.getFullMessage() + "An update is available: https://www.spigotmc.org/resources/advancedreplay-1-8-1-15.52849/");
+			}
+		}
+	}
+}
