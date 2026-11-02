@@ -36,6 +36,16 @@ public class ReplayHelper {
     // Replay id -> the active Replayer, so /rp join can find a running synced session.
     public static HashMap<String, Replayer> activeReplayers = new HashMap<>();
 
+    // Base64 textures for the control heads, applied directly on legacy versions where the
+    // MHF_* owner-name skulls don't resolve (offline-mode 1.8 servers). Keyed by the owner name.
+    private static final Map<String, String> LEGACY_HEAD_TEXTURES = new HashMap<>();
+
+    static {
+        LEGACY_HEAD_TEXTURES.put("MHF_ArrowRight", "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZDM0ZWYwNjM4NTM3MjIyYjIwZjQ4MDY5NGRhZGMwZjg1ZmJlMDc1OWQ1ODFhYTdmY2RmMmU0MzEzOTM3NzE1OCJ9fX0=");
+        LEGACY_HEAD_TEXTURES.put("MHF_ArrowLeft", "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZjdhYWNhZDE5M2UyMjI2OTcxZWQ5NTMwMmRiYTQzMzQzOGJlNDY0NGZiYWI1ZWJmODE4MDU0MDYxNjY3ZmJlMiJ9fX0=");
+        LEGACY_HEAD_TEXTURES.put("Push_red_button", "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHBzOi8vdGV4dHVyZXMubWluZWNyYWZ0Lm5ldC90ZXh0dXJlLzM4NTFjZmI2NzE3Nzk1OTc0ZDMyMmU3YmI2OThlOWFiNTdlMWUwZTIyOTUwNDg2YTY5OWM4MThlMDJlOTBiMjkifX19");
+    }
+
     public static ItemStack createItem(ItemConfigOption option) {
         String displayName = ChatColor.translateAlternateColorCodes('&', option.getName());
 
@@ -45,7 +55,15 @@ public class ReplayHelper {
         if (stack.getItemMeta() instanceof SkullMeta) {
 
             SkullMeta meta = (SkullMeta) stack.getItemMeta();
-            if (option.getOwner() != null) {
+
+            String legacyTexture = (option.getOwner() != null && VersionUtil.isBelow(VersionEnum.V1_18))
+                    ? LEGACY_HEAD_TEXTURES.get(option.getOwner()) : null;
+
+            if (legacyTexture != null) {
+                // Pre-1.18 can't set skull textures via the Bukkit profile API, and owner-name heads
+                // don't load on offline-mode servers, so apply the texture directly via NMS reflection.
+                applyLegacyTexture(meta, legacyTexture);
+            } else if (option.getOwner() != null) {
                 meta.setOwner(option.getOwner());
             }
 
@@ -144,6 +162,24 @@ public class ReplayHelper {
 
     public static boolean isInRange(Location loc1, Location loc2) {
         return loc1.getWorld().getName().equals(loc2.getWorld().getName()) && (loc1.distance(loc2) <= 48D);
+    }
+
+    /** Sets a skull's texture from a base64 "textures" value using the NMS GameProfile (works on legacy/offline servers). */
+    private static void applyLegacyTexture(SkullMeta meta, String base64) {
+        try {
+            Class<?> gameProfileClass = Class.forName("com.mojang.authlib.GameProfile");
+            Class<?> propertyClass = Class.forName("com.mojang.authlib.properties.Property");
+            Object profile = gameProfileClass.getConstructor(UUID.class, String.class).newInstance(UUID.randomUUID(), "head");
+            Object properties = gameProfileClass.getMethod("getProperties").invoke(profile);
+            Object property = propertyClass.getConstructor(String.class, String.class).newInstance("textures", base64);
+            properties.getClass().getMethod("put", Object.class, Object.class).invoke(properties, "textures", property);
+
+            java.lang.reflect.Field field = meta.getClass().getDeclaredField("profile");
+            field.setAccessible(true);
+            field.set(meta, profile);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public static void setSkullTexture(SkullMeta meta, String texture) {

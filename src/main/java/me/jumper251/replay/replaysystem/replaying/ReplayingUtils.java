@@ -499,7 +499,9 @@ public class ReplayingUtils {
 		
 		int tabMode = Bukkit.getPlayer(action.getName()) != null ? 0 : 2;
 		
-		if (VersionUtil.isAbove(VersionEnum.V1_14) && Bukkit.getPlayer(action.getName()) != null) {
+		if ((VersionUtil.isAbove(VersionEnum.V1_14) || VersionUtil.isCompatible(VersionEnum.V1_8)) && Bukkit.getPlayer(action.getName()) != null) {
+			// Use a fresh UUID and keep the NPC in the tab list so its skin profile resolves
+			// (on 1.8 a real online player's UUID would clash and the skin wouldn't load).
 			tabMode = 2;
 			spawnData.setUuid(UUID.randomUUID());
 		}
@@ -521,7 +523,7 @@ public class ReplayingUtils {
 			tabMode = 2;
 		}
 		
-		if ((spawnData.getSignature() != null && (Bukkit.getPlayer(action.getName()) == null || VersionUtil.isAbove(VersionEnum.V1_14))) || (spawnData.getSignature() != null && ConfigManager.HIDE_PLAYERS && !action.getName().equals(this.replayer.getWatchingPlayer().getName()))) {
+		if ((spawnData.getSignature() != null && (Bukkit.getPlayer(action.getName()) == null || VersionUtil.isAbove(VersionEnum.V1_14) || VersionUtil.isCompatible(VersionEnum.V1_8))) || (spawnData.getSignature() != null && ConfigManager.HIDE_PLAYERS && !action.getName().equals(this.replayer.getWatchingPlayer().getName()))) {
 			UserProfile userProfile = new UserProfile(spawnData.getUuid(), action.getName());
 			SignatureData sig = spawnData.getSignature();
 			userProfile.getTextureProperties().add(new TextureProperty(sig.getName(), sig.getValue(), sig.getSignature()));
